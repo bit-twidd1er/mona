@@ -2,7 +2,7 @@
  
 U{Corelan<https://www.corelan.be>}
 
-Copyright (c) 2011-2017, Peter Van Eeckhoutte - Corelan GCV
+Copyright (c) 2011-2018, Peter Van Eeckhoutte - Corelan GCV
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -27,12 +27,12 @@ ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  
-$Revision: 577 $
-$Id: mona.py 577 2017-07-02 15:18:00Z corelanc0d3r $ 
+$Revision: 582 $
+$Id: mona.py 582 2018-04-23 22:22:00Z corelanc0d3r $ 
 """
 
 __VERSION__ = '2.0'
-__REV__ = filter(str.isdigit, '$Revision: 577 $')
+__REV__ = filter(str.isdigit, '$Revision: 582 $')
 __IMM__ = '1.8'
 __DEBUGGERAPP__ = ''
 arch = 32
@@ -5490,118 +5490,129 @@ def getSearchSequences(searchtype,searchcriteria="",type="",criteria={}):
 			minval += 1
 
 	if searchtype.lower() == "seh":
+		if type == "rop":
+			dbg.log("    - Looking for addresses that will help with SEH overwrite & ROP" )
 		for roffset in offsets:
 			for r1 in regs:
-				search.append( ["add esp,4\npop " + r1+"\nret "+roffset,dbg.assemble("add esp,4\npop " + r1+"\nret "+roffset)] )
-				search.append( ["pop " + r1+"\nadd esp,4\nret "+roffset,dbg.assemble("pop " + r1+"\nadd esp,4\nret "+roffset)] )				
+				if type == "rop":
+					search.append( ["add esp,4\npop " + r1+"\npop esp\nret "+roffset,dbg.assemble("add esp,4\npop " + r1+"\npop esp\nret "+roffset)] )
+					search.append( ["pop " + r1+"\nadd esp,4\npop esp\nret "+roffset,dbg.assemble("pop " + r1+"\nadd esp,4\npop esp\nret "+roffset)] )				
+				else:
+					search.append( ["add esp,4\npop " + r1+"\nret "+roffset,dbg.assemble("add esp,4\npop " + r1+"\nret "+roffset)] )
+					search.append( ["pop " + r1+"\nadd esp,4\nret "+roffset,dbg.assemble("pop " + r1+"\nadd esp,4\nret "+roffset)] )
 				for r2 in regs:
-					thissearch = ["pop "+r1+"\npop "+r2+"\nret "+roffset,dbg.assemble("pop "+r1+"\npop "+r2+"\nret "+roffset)]
-					search.append( thissearch )
 					if type == "rop":
 						search.append( ["pop "+r1+"\npop "+r2+"\npop esp\nret "+roffset,dbg.assemble("pop "+r1+"\npop "+r2+"\npop esp\nret "+roffset)] )
 						for r3 in regs:
 							search.append( ["pop "+r1+"\npop "+r2+"\npop "+r3+"\ncall ["+r3+"]",dbg.assemble("pop "+r1+"\npop "+r2+"\npop "+r3+"\ncall ["+r3+"]")] )
-			search.append( ["add esp,8\nret "+roffset,dbg.assemble("add esp,8\nret "+roffset)])
-			search.append( ["popad\npush ebp\nret "+roffset,dbg.assemble("popad\npush ebp\nret "+roffset)])					
-		#popad + jmp/call
-		search.append(["popad\njmp ebp",dbg.assemble("popad\njmp ebp")])
-		search.append(["popad\ncall ebp",dbg.assemble("popad\ncall ebp")])		
-		#call / jmp dword
-		search.append(["call dword ptr ss:[esp+08]","\xff\x54\x24\x08"])
-		search.append(["call dword ptr ss:[esp+08]","\xff\x94\x24\x08\x00\x00\x00"])
-		search.append(["call dword ptr ds:[esp+08]","\x3e\xff\x54\x24\x08"])
+					else:
+						thissearch = ["pop "+r1+"\npop "+r2+"\nret "+roffset,dbg.assemble("pop "+r1+"\npop "+r2+"\nret "+roffset)]
+						search.append( thissearch )
+			if type != "rop":		
+				search.append( ["add esp,8\nret "+roffset,dbg.assemble("add esp,8\nret "+roffset)])
+				search.append( ["popad\npush ebp\nret "+roffset,dbg.assemble("popad\npush ebp\nret "+roffset)])
+			else:
+				search.append( ["add esp,8\npop esp\nret "+roffset,dbg.assemble("add esp,8\npop esp\nret "+roffset)])
+		if type != "rop":
+			#popad + jmp/call
+			search.append(["popad\njmp ebp",dbg.assemble("popad\njmp ebp")])
+			search.append(["popad\ncall ebp",dbg.assemble("popad\ncall ebp")])		
+			#call / jmp dword
+			search.append(["call dword ptr ss:[esp+08]","\xff\x54\x24\x08"])
+			search.append(["call dword ptr ss:[esp+08]","\xff\x94\x24\x08\x00\x00\x00"])
+			search.append(["call dword ptr ds:[esp+08]","\x3e\xff\x54\x24\x08"])
 
-		search.append(["jmp dword ptr ss:[esp+08]","\xff\x64\x24\x08"])
-		search.append(["jmp dword ptr ss:[esp+08]","\xff\xa4\x24\x08\x00\x00\x00"])
-		search.append(["jmp dword ptr ds:[esp+08]","\x3e\xff\x64\x24\x08"])
-		
-		search.append(["call dword ptr ss:[esp+14]","\xff\x54\x24\x14"])
-		search.append(["call dword ptr ss:[esp+14]","\xff\x94\x24\x14\x00\x00\x00"])	
-		search.append(["call dword ptr ds:[esp+14]","\x3e\xff\x54\x24\x14"])
-		
-		search.append(["jmp dword ptr ss:[esp+14]","\xff\x64\x24\x14"])
-		search.append(["jmp dword ptr ss:[esp+14]","\xff\xa4\x24\x14\x00\x00\x00"])		
-		search.append(["jmp dword ptr ds:[esp+14]","\x3e\xff\x64\x24\x14"])
-		
-		search.append(["call dword ptr ss:[esp+1c]","\xff\x54\x24\x1c"])
-		search.append(["call dword ptr ss:[esp+1c]","\xff\x94\x24\x1c\x00\x00\x00"])		
-		search.append(["call dword ptr ds:[esp+1c]","\x3e\xff\x54\x24\x1c"])
-		
-		search.append(["jmp dword ptr ss:[esp+1c]","\xff\x64\x24\x1c"])
-		search.append(["jmp dword ptr ss:[esp+1c]","\xff\xa4\x24\x1c\x00\x00\x00"])		
-		search.append(["jmp dword ptr ds:[esp+1c]","\x3e\xff\x64\x24\x1c"])
-		
-		search.append(["call dword ptr ss:[esp+2c]","\xff\x54\x24\x2c"])
-		search.append(["call dword ptr ss:[esp+2c]","\xff\x94\x24\x2c\x00\x00\x00"])
-		search.append(["call dword ptr ds:[esp+2c]","\x3e\xff\x54\x24\x2c"])
+			search.append(["jmp dword ptr ss:[esp+08]","\xff\x64\x24\x08"])
+			search.append(["jmp dword ptr ss:[esp+08]","\xff\xa4\x24\x08\x00\x00\x00"])
+			search.append(["jmp dword ptr ds:[esp+08]","\x3e\xff\x64\x24\x08"])
+			
+			search.append(["call dword ptr ss:[esp+14]","\xff\x54\x24\x14"])
+			search.append(["call dword ptr ss:[esp+14]","\xff\x94\x24\x14\x00\x00\x00"])	
+			search.append(["call dword ptr ds:[esp+14]","\x3e\xff\x54\x24\x14"])
+			
+			search.append(["jmp dword ptr ss:[esp+14]","\xff\x64\x24\x14"])
+			search.append(["jmp dword ptr ss:[esp+14]","\xff\xa4\x24\x14\x00\x00\x00"])		
+			search.append(["jmp dword ptr ds:[esp+14]","\x3e\xff\x64\x24\x14"])
+			
+			search.append(["call dword ptr ss:[esp+1c]","\xff\x54\x24\x1c"])
+			search.append(["call dword ptr ss:[esp+1c]","\xff\x94\x24\x1c\x00\x00\x00"])		
+			search.append(["call dword ptr ds:[esp+1c]","\x3e\xff\x54\x24\x1c"])
+			
+			search.append(["jmp dword ptr ss:[esp+1c]","\xff\x64\x24\x1c"])
+			search.append(["jmp dword ptr ss:[esp+1c]","\xff\xa4\x24\x1c\x00\x00\x00"])		
+			search.append(["jmp dword ptr ds:[esp+1c]","\x3e\xff\x64\x24\x1c"])
+			
+			search.append(["call dword ptr ss:[esp+2c]","\xff\x54\x24\x2c"])
+			search.append(["call dword ptr ss:[esp+2c]","\xff\x94\x24\x2c\x00\x00\x00"])
+			search.append(["call dword ptr ds:[esp+2c]","\x3e\xff\x54\x24\x2c"])
 
-		search.append(["jmp dword ptr ss:[esp+2c]","\xff\x64\x24\x2c"])
-		search.append(["jmp dword ptr ss:[esp+2c]","\xff\xa4\x24\x2c\x00\x00\x00"])		
-		search.append(["jmp dword ptr ds:[esp+2c]","\x3e\xff\x64\x24\x2c"])
-		
-		search.append(["call dword ptr ss:[esp+44]","\xff\x54\x24\x44"])
-		search.append(["call dword ptr ss:[esp+44]","\xff\x94\x24\x44\x00\x00\x00"])		
-		search.append(["call dword ptr ds:[esp+44]","\x3e\xff\x54\x24\x44"])		
-		
-		search.append(["jmp dword ptr ss:[esp+44]","\xff\x64\x24\x44"])
-		search.append(["jmp dword ptr ss:[esp+44]","\xff\xa4\x24\x44\x00\x00\x00"])
-		search.append(["jmp dword ptr ds:[esp+44]","\x3e\xff\x64\x24\x44"])
-		
-		search.append(["call dword ptr ss:[esp+50]","\xff\x54\x24\x50"])
-		search.append(["call dword ptr ss:[esp+50]","\xff\x94\x24\x50\x00\x00\x00"])		
-		search.append(["call dword ptr ds:[esp+50]","\x3e\xff\x54\x24\x50"])		
-		
-		search.append(["jmp dword ptr ss:[esp+50]","\xff\x64\x24\x50"])
-		search.append(["jmp dword ptr ss:[esp+50]","\xff\xa4\x24\x50\x00\x00\x00"])
-		search.append(["jmp dword ptr ds:[esp+50]","\x3e\xff\x64\x24\x50"])
-		
-		search.append(["call dword ptr ss:[ebp+0c]","\xff\x55\x0c"])
-		search.append(["call dword ptr ss:[ebp+0c]","\xff\x95\x0c\x00\x00\x00"])		
-		search.append(["call dword ptr ds:[ebp+0c]","\x3e\xff\x55\x0c"])		
-		
-		search.append(["jmp dword ptr ss:[ebp+0c]","\xff\x65\x0c"])
-		search.append(["jmp dword ptr ss:[ebp+0c]","\xff\xa5\x0c\x00\x00\x00"])		
-		search.append(["jmp dword ptr ds:[ebp+0c]","\x3e\xff\x65\x0c"])		
-		
-		search.append(["call dword ptr ss:[ebp+24]","\xff\x55\x24"])
-		search.append(["call dword ptr ss:[ebp+24]","\xff\x95\x24\x00\x00\x00"])		
-		search.append(["call dword ptr ds:[ebp+24]","\x3e\xff\x55\x24"])
-		
-		search.append(["jmp dword ptr ss:[ebp+24]","\xff\x65\x24"])
-		search.append(["jmp dword ptr ss:[ebp+24]","\xff\xa5\x24\x00\x00\x00"])		
-		search.append(["jmp dword ptr ds:[ebp+24]","\x3e\xff\x65\x24"])	
-		
-		search.append(["call dword ptr ss:[ebp+30]","\xff\x55\x30"])
-		search.append(["call dword ptr ss:[ebp+30]","\xff\x95\x30\x00\x00\x00"])		
-		search.append(["call dword ptr ds:[ebp+30]","\x3e\xff\x55\x30"])
-		
-		search.append(["jmp dword ptr ss:[ebp+30]","\xff\x65\x30"])
-		search.append(["jmp dword ptr ss:[ebp+30]","\xff\xa5\x30\x00\x00\x00"])		
-		search.append(["jmp dword ptr ds:[ebp+30]","\x3e\xff\x65\x30"])	
-		
-		search.append(["call dword ptr ss:[ebp-04]","\xff\x55\xfc"])
-		search.append(["call dword ptr ss:[ebp-04]","\xff\x95\xfc\xff\xff\xff"])		
-		search.append(["call dword ptr ds:[ebp-04]","\x3e\xff\x55\xfc"])
-		
-		search.append(["jmp dword ptr ss:[ebp-04]","\xff\x65\xfc",])
-		search.append(["jmp dword ptr ss:[ebp-04]","\xff\xa5\xfc\xff\xff\xff",])		
-		search.append(["jmp dword ptr ds:[ebp-04]","\x3e\xff\x65\xfc",])		
-		
-		search.append(["call dword ptr ss:[ebp-0c]","\xff\x55\xf4"])
-		search.append(["call dword ptr ss:[ebp-0c]","\xff\x95\xf4\xff\xff\xff"])		
-		search.append(["call dword ptr ds:[ebp-0c]","\x3e\xff\x55\xf4"])
-		
-		search.append(["jmp dword ptr ss:[ebp-0c]","\xff\x65\xf4",])
-		search.append(["jmp dword ptr ss:[ebp-0c]","\xff\xa5\xf4\xff\xff\xff",])		
-		search.append(["jmp dword ptr ds:[ebp-0c]","\x3e\xff\x65\xf4",])
-		
-		search.append(["call dword ptr ss:[ebp-18]","\xff\x55\xe8"])
-		search.append(["call dword ptr ss:[ebp-18]","\xff\x95\xe8\xff\xff\xff"])		
-		search.append(["call dword ptr ds:[ebp-18]","\x3e\xff\x55\xe8"])
-		
-		search.append(["jmp dword ptr ss:[ebp-18]","\xff\x65\xe8",])
-		search.append(["jmp dword ptr ss:[ebp-18]","\xff\xa5\xe8\xff\xff\xff",])		
-		search.append(["jmp dword ptr ds:[ebp-18]","\x3e\xff\x65\xe8",])
+			search.append(["jmp dword ptr ss:[esp+2c]","\xff\x64\x24\x2c"])
+			search.append(["jmp dword ptr ss:[esp+2c]","\xff\xa4\x24\x2c\x00\x00\x00"])		
+			search.append(["jmp dword ptr ds:[esp+2c]","\x3e\xff\x64\x24\x2c"])
+			
+			search.append(["call dword ptr ss:[esp+44]","\xff\x54\x24\x44"])
+			search.append(["call dword ptr ss:[esp+44]","\xff\x94\x24\x44\x00\x00\x00"])		
+			search.append(["call dword ptr ds:[esp+44]","\x3e\xff\x54\x24\x44"])		
+			
+			search.append(["jmp dword ptr ss:[esp+44]","\xff\x64\x24\x44"])
+			search.append(["jmp dword ptr ss:[esp+44]","\xff\xa4\x24\x44\x00\x00\x00"])
+			search.append(["jmp dword ptr ds:[esp+44]","\x3e\xff\x64\x24\x44"])
+			
+			search.append(["call dword ptr ss:[esp+50]","\xff\x54\x24\x50"])
+			search.append(["call dword ptr ss:[esp+50]","\xff\x94\x24\x50\x00\x00\x00"])		
+			search.append(["call dword ptr ds:[esp+50]","\x3e\xff\x54\x24\x50"])		
+			
+			search.append(["jmp dword ptr ss:[esp+50]","\xff\x64\x24\x50"])
+			search.append(["jmp dword ptr ss:[esp+50]","\xff\xa4\x24\x50\x00\x00\x00"])
+			search.append(["jmp dword ptr ds:[esp+50]","\x3e\xff\x64\x24\x50"])
+			
+			search.append(["call dword ptr ss:[ebp+0c]","\xff\x55\x0c"])
+			search.append(["call dword ptr ss:[ebp+0c]","\xff\x95\x0c\x00\x00\x00"])		
+			search.append(["call dword ptr ds:[ebp+0c]","\x3e\xff\x55\x0c"])		
+			
+			search.append(["jmp dword ptr ss:[ebp+0c]","\xff\x65\x0c"])
+			search.append(["jmp dword ptr ss:[ebp+0c]","\xff\xa5\x0c\x00\x00\x00"])		
+			search.append(["jmp dword ptr ds:[ebp+0c]","\x3e\xff\x65\x0c"])		
+			
+			search.append(["call dword ptr ss:[ebp+24]","\xff\x55\x24"])
+			search.append(["call dword ptr ss:[ebp+24]","\xff\x95\x24\x00\x00\x00"])		
+			search.append(["call dword ptr ds:[ebp+24]","\x3e\xff\x55\x24"])
+			
+			search.append(["jmp dword ptr ss:[ebp+24]","\xff\x65\x24"])
+			search.append(["jmp dword ptr ss:[ebp+24]","\xff\xa5\x24\x00\x00\x00"])		
+			search.append(["jmp dword ptr ds:[ebp+24]","\x3e\xff\x65\x24"])	
+			
+			search.append(["call dword ptr ss:[ebp+30]","\xff\x55\x30"])
+			search.append(["call dword ptr ss:[ebp+30]","\xff\x95\x30\x00\x00\x00"])		
+			search.append(["call dword ptr ds:[ebp+30]","\x3e\xff\x55\x30"])
+			
+			search.append(["jmp dword ptr ss:[ebp+30]","\xff\x65\x30"])
+			search.append(["jmp dword ptr ss:[ebp+30]","\xff\xa5\x30\x00\x00\x00"])		
+			search.append(["jmp dword ptr ds:[ebp+30]","\x3e\xff\x65\x30"])	
+			
+			search.append(["call dword ptr ss:[ebp-04]","\xff\x55\xfc"])
+			search.append(["call dword ptr ss:[ebp-04]","\xff\x95\xfc\xff\xff\xff"])		
+			search.append(["call dword ptr ds:[ebp-04]","\x3e\xff\x55\xfc"])
+			
+			search.append(["jmp dword ptr ss:[ebp-04]","\xff\x65\xfc",])
+			search.append(["jmp dword ptr ss:[ebp-04]","\xff\xa5\xfc\xff\xff\xff",])		
+			search.append(["jmp dword ptr ds:[ebp-04]","\x3e\xff\x65\xfc",])		
+			
+			search.append(["call dword ptr ss:[ebp-0c]","\xff\x55\xf4"])
+			search.append(["call dword ptr ss:[ebp-0c]","\xff\x95\xf4\xff\xff\xff"])		
+			search.append(["call dword ptr ds:[ebp-0c]","\x3e\xff\x55\xf4"])
+			
+			search.append(["jmp dword ptr ss:[ebp-0c]","\xff\x65\xf4",])
+			search.append(["jmp dword ptr ss:[ebp-0c]","\xff\xa5\xf4\xff\xff\xff",])		
+			search.append(["jmp dword ptr ds:[ebp-0c]","\x3e\xff\x65\xf4",])
+			
+			search.append(["call dword ptr ss:[ebp-18]","\xff\x55\xe8"])
+			search.append(["call dword ptr ss:[ebp-18]","\xff\x95\xe8\xff\xff\xff"])		
+			search.append(["call dword ptr ds:[ebp-18]","\x3e\xff\x55\xe8"])
+			
+			search.append(["jmp dword ptr ss:[ebp-18]","\xff\x65\xe8",])
+			search.append(["jmp dword ptr ss:[ebp-18]","\xff\xa5\xe8\xff\xff\xff",])		
+			search.append(["jmp dword ptr ds:[ebp-18]","\x3e\xff\x65\xe8",])
 	return search
 
 	
@@ -6193,7 +6204,7 @@ def assemble(instructions,encoder=""):
 
 
 	
-def findROPGADGETS(modulecriteria={},criteria={},endings=[],maxoffset=40,depth=5,split=False,pivotdistance=0,fast=False,mode="all"):
+def findROPGADGETS(modulecriteria={},criteria={},endings=[],maxoffset=40,depth=5,split=False,pivotdistance=0,fast=False,mode="all", sortedprint=False):
 	"""
 	Searches for rop gadgets
 
@@ -6208,6 +6219,7 @@ def findROPGADGETS(modulecriteria={},criteria={},endings=[],maxoffset=40,depth=5
 	pivotdistance - minimum distance a stackpivot needs to be
 	fast - Boolean indicating if you want to process less obvious gadgets as well
 	mode - internal use only
+	sortedprint - sort pointers before printing output to rop.txt
 	
 	Return:
 	Output is written to files, containing rop gadgets, suggestions, stack pivots and virtualprotect/virtualalloc routine (if possible)
@@ -6235,7 +6247,8 @@ def findROPGADGETS(modulecriteria={},criteria={},endings=[],maxoffset=40,depth=5
 	filestouse = []
 	vplogtxt = ""
 	suggestions = {}
-	
+
+
 	if "f" in criteria:
 		if criteria["f"] <> "":
 			if type(criteria["f"]).__name__.lower() != "bool":		
@@ -6481,7 +6494,7 @@ def findROPGADGETS(modulecriteria={},criteria={},endings=[],maxoffset=40,depth=5
 	dbg.log("[+] Writing stackpivots to file " + thislog)
 	logfile.write("Stack pivots, minimum distance " + str(pivotdistance),thislog)
 	logfile.write("-------------------------------------",thislog)
-	logfile.write("Non-safeSEH protected pivots :",thislog)
+	logfile.write("Non-SafeSEH protected pivots :",thislog)
 	logfile.write("------------------------------",thislog)
 	arrtowrite = ""	
 	pivotcount = 0
@@ -6500,6 +6513,8 @@ def findROPGADGETS(modulecriteria={},criteria={},endings=[],maxoffset=40,depth=5
 			fh.writelines(arrtowrite)
 	except:
 		pass
+	logfile.write("", thislog)
+	logfile.write("", thislog)
 	logfile.write("SafeSEH protected pivots :",thislog)
 	logfile.write("--------------------------",thislog)	
 	arrtowrite = ""	
@@ -6513,7 +6528,7 @@ def findROPGADGETS(modulecriteria={},criteria={},endings=[],maxoffset=40,depth=5
 					modname = ptrx.belongsTo()
 					#modinfo = MnModule(modname)
 					sdisthex = "%02x" % sdist
-					ptrinfo = "0x" + toHex(spivot) + " : {pivot " + str(sdist) + " / 0x" + sdisthex + "} : " + schain + "    ** [" + modname + "] **   |  " + ptrx.__str__()+"\n"
+					ptrinfo = "0x" + toHex(spivot) + " : {pivot " + str(sdist) + " / 0x" + sdisthex + "} : " + schain + "    ** [" + modname + "] SafeSEH **   |  " + ptrx.__str__()+"\n"
 					pivotcount += 1
 					arrtowrite += ptrinfo
 			fh.writelines(arrtowrite)
@@ -6546,7 +6561,22 @@ def findROPGADGETS(modulecriteria={},criteria={},endings=[],maxoffset=40,depth=5
 			try:
 				with open(thislog, "a") as fh:
 					arrtowrite = ""
-					for gadget in interestinggadgets:
+					if sortedprint:
+						arrptrs = []
+						dbg.log("    Sorting interesting gadgets first")
+						for gadget in interestinggadgets:
+							arrptrs.append(gadget)
+						arrptrs.sort()
+						dbg.log("    Done sorting, let's go")
+						for gadget in arrptrs:
+							ptrx = MnPointer(gadget)
+							modname = ptrx.belongsTo()
+							#modinfo = MnModule(modname)
+							ptrinfo = "0x" + toHex(gadget) + " : " + interestinggadgets[gadget] + "    ** [" + modname + "] **   |  " + ptrx.__str__()+"\n"
+							arrtowrite += ptrinfo
+
+					else:
+						for gadget in interestinggadgets:
 							ptrx = MnPointer(gadget)
 							modname = ptrx.belongsTo()
 							#modinfo = MnModule(modname)
@@ -6567,12 +6597,27 @@ def findROPGADGETS(modulecriteria={},criteria={},endings=[],maxoffset=40,depth=5
 					logfile.write("-------------",thislog)
 					with open(thislog, "a") as fh:
 						arrtowrite=""
-						for gadget in ropgadgets:
+						if sortedprint:
+							arrptrs = []
+							dbg.log("    Sorting other gadgets too")
+							for gadget in ropgadgets:
+								arrptrs.append(gadget)
+							arrptrs.sort()
+							dbg.log("    Done sorting, let's go")
+							for gadget in arrptrs:
 								ptrx = MnPointer(gadget)
 								modname = ptrx.belongsTo()
 								#modinfo = MnModule(modname)
 								ptrinfo = "0x" + toHex(gadget) + " : " + ropgadgets[gadget] + "    ** [" + modname + "] **   |  " + ptrx.__str__()+"\n"
 								arrtowrite += ptrinfo
+						else:	
+							for gadget in ropgadgets:
+								ptrx = MnPointer(gadget)
+								modname = ptrx.belongsTo()
+								#modinfo = MnModule(modname)
+								ptrinfo = "0x" + toHex(gadget) + " : " + ropgadgets[gadget] + "    ** [" + modname + "] **   |  " + ptrx.__str__()+"\n"
+								arrtowrite += ptrinfo
+
 						dbg.log("    Wrote %d other gadgets to file" % len(ropgadgets))
 						objprogressfile.write("Writing results to file " + thislog + " (" + str(len(ropgadgets))+" other gadgets)",progressfile)
 						fh.writelines(arrtowrite)
@@ -6622,9 +6667,10 @@ def findROPGADGETS(modulecriteria={},criteria={},endings=[],maxoffset=40,depth=5
 	objprogressfile.write("Done (" + thistimestamp+")",progressfile)
 	dbg.log("Done")
 	return interestinggadgets,ropgadgets,suggestions,vplogtxt
+
 	
-	#----- JOP gadget finder ----- #
-			
+
+#----- JOP gadget finder ----- #			
 def findJOPGADGETS(modulecriteria={},criteria={},depth=6):
 	"""
 	Searches for jop gadgets
@@ -10912,6 +10958,12 @@ def args2criteria(args,modulecriteria,criteria):
 			criteria[ptrcrit] = True
 		dbg.log("    - Pointer criteria : %s" % ptrcriteria)
 	
+	if "cbp" in args:
+		dbg.log("    * Trying to use '-cbp' instead of '-cpb'?", highlight=True)
+		if not "cpb" in args:
+			dbg.log("    * I'll try to fix your typo myself, but please pay attention to the syntax next time", highlight=True)
+			args["cpb"] = args["cbp"]
+	
 	if "cpb" in args:
 		badchars = args["cpb"]
 		badchars = badchars.replace("'","")
@@ -11487,6 +11539,7 @@ def main(args):
 			thedistance = 8
 			split = False
 			fast = False
+			sortedprint = False
 			endingstr = ""
 			endings = []
 			
@@ -11528,6 +11581,8 @@ def main(args):
 				if args["f"] <> "":
 					criteria["f"] = args["f"]
 			
+			if "sort" in args:
+				sortedprint = True
 			
 			if "rva" in args:
 				criteria["rva"] = True
@@ -11539,8 +11594,9 @@ def main(args):
 			else:
 				mode = "all"
 			
-			findROPGADGETS(modulecriteria,criteria,endings,maxoffset,depth,split,thedistance,fast,mode)
+			findROPGADGETS(modulecriteria,criteria,endings,maxoffset,depth,split,thedistance,fast,mode,sortedprint)
 			
+
 		def procJseh(args):
 			results = []
 			showred=0
@@ -12866,18 +12922,13 @@ def main(args):
 			"""
 
 			updateproto = "https"
-			#if "http" in args:
-			#	updateproto  = "http"
-			
+
 			#debugger version	
 			imversion = __IMM__
 			#url
 			dbg.setStatusBar("Running update process...")
 			dbg.updateLog()
 			updateurl = "https://github.com/corelan/mona/raw/master/mona.py"
-			
-			#if updateproto == "http":
-			#	updateurl = "http://redmine.corelan.be/projects/mona/repository/git/revisions/master/raw/mona.py"
 			
 			currentversion,currentrevision = getVersionInfo(inspect.stack()[0][1])
 			u = ""
@@ -12892,7 +12943,8 @@ def main(args):
 					dbg.log("[-] Unable to check latest version (corrupted file ?), try again later",highlight=1)
 					return
 			except:
-				dbg.log("[-] Unable to check latest version (download error), run !mona update -http or try again later",highlight=1)
+				dbg.log("[-] Unable to check latest version (download error). Try again later",highlight=1)
+				dbg.log("    Meanwhile, please check/confirm that you're running a recent version of python 2.7 (2.7.14 or higher)", highlight=1)
 				return
 			#check versions
 			doupdate = False
@@ -12932,8 +12984,7 @@ def main(args):
 				else:
 					dbg.log("[+] Checking if %s needs an update..." % libfile)
 					updateurl = "https://github.com/corelan/windbglib/raw/master/windbglib.py"
-					#if updateproto == "http":
-					#	updateurl = updateproto + "://redmine.corelan.be/projects/windbglib/repository/raw/windbglib.py"
+
 					currentversion,currentrevision = getVersionInfo(libfile)
 					u = ""
 					try:
@@ -12947,7 +12998,8 @@ def main(args):
 							dbg.log("[-] Unable to check latest version (corrupted file ?), try again later",highlight=1)
 							return
 					except:
-						dbg.log("[-] Unable to check latest version (download error), run !mona update -http or try again later",highlight=1)
+						dbg.log("[-] Unable to check latest version (download error). Try again later",highlight=1)
+						dbg.log("    Meanwhile, please check/confirm that you're running a recent version of python 2.7 (2.7.14 or higher)", highlight=1)
 						return
 
 					#check versions
@@ -17913,7 +17965,8 @@ Optional parameters :
     -end <instruction(s)> : specify one or more instructions that will be used as chain end. 
                                (Separate instructions with #). Default ending is RETN
     -f \"file1,file2,..filen\" : use mona generated rop files as input instead of searching in memory
-    -rva : use RVA's in rop chain"""
+    -rva : use RVA's in rop chain
+    -sort : sort the output in rop.txt (sort on pointer value)"""
 	
 		jopUsage="""Default module criteria : non aslr,non rebase,non os
 Optional parameters : 
@@ -18074,9 +18127,7 @@ Mandatory argument :
 Optional argument:
     -t <type>     : specify type of output. Valid choices are 'ruby' (default) or 'python' """
 	
-		updateUsage = """Update mona to the latest version
-Optional argument : 
-    -http : Use http instead of https"""
+		updateUsage = """Update mona to the latest version"""
 		getpcUsage = """Find getpc routine for specific register
 Mandatory argument :
     -r : register (ex: eax)"""
